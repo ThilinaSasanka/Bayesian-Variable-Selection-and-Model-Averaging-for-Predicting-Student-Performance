@@ -1,0 +1,700 @@
+---
+title: "STA4063 - Bayesian Statistics: Impact of Student Habits on Exam Performance"
+author: "Thilina Pathirana"
+date: "2025-08-28"
+output:
+  word_document: default
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+
+## Data & Preprocessing
+
+##Load the data set.
+```{r}
+studentHabitsPerformance <- read.csv("student_habits_performance.csv", header = TRUE)
+```
+
+##Head of the data set.
+```{r}
+head(studentHabitsPerformance)
+```
+
+##Structure of the variables
+```{r}
+str(studentHabitsPerformance)
+```
+##Data Preprocessing
+
+##Encode nominal and ordinal categorical variables
+```{r}
+studentHabitsPerformance$part_time_job <- as.numeric(as.factor(studentHabitsPerformance$part_time_job))
+studentHabitsPerformance$extracurricular_participation <- as.numeric(as.factor(studentHabitsPerformance$extracurricular_participation))
+studentHabitsPerformance$gender <- as.numeric(ifelse(studentHabitsPerformance$gender == "Male", 0, ifelse(studentHabitsPerformance$gender == "Female", 1, 2)))
+studentHabitsPerformance$diet_quality <- as.numeric(ifelse(studentHabitsPerformance$diet_quality == "Poor", 0,
+                         ifelse(studentHabitsPerformance$diet_quality == "Fair", 1, 2)))
+studentHabitsPerformance$parental_education_level <- as.numeric(ifelse(studentHabitsPerformance$parental_education_level == "None", 0,
+                                                                       ifelse(studentHabitsPerformance$parental_education_level == "High School", 1,
+                                                                       ifelse(studentHabitsPerformance$parental_education_level == "Bachelor", 2, 3))))
+studentHabitsPerformance$internet_quality <- as.numeric(ifelse(studentHabitsPerformance$internet_quality == "Poor", 0,
+                         ifelse(studentHabitsPerformance$internet_quality == "Average", 1, 2)))
+
+
+```
+
+
+##Structure of the encoded and other variables 
+```{r}
+str(studentHabitsPerformance)
+```
+
+##Remove Identifiers and take all the numerical variables as a new data frame HabitsPerformanceData.
+```{r}
+HabitsPerformanceData <- cbind(studentHabitsPerformance$age,studentHabitsPerformance$gender, studentHabitsPerformance$study_hours_per_day, studentHabitsPerformance$social_media_hours, studentHabitsPerformance$netflix_hours,studentHabitsPerformance$part_time_job,  studentHabitsPerformance$attendance_percentage, studentHabitsPerformance$sleep_hours , studentHabitsPerformance$diet_quality, studentHabitsPerformance$exercise_frequency, studentHabitsPerformance$parental_education_level , studentHabitsPerformance$internet_quality, studentHabitsPerformance$mental_health_rating, studentHabitsPerformance$extracurricular_participation, studentHabitsPerformance$exam_score)
+
+HabitsPerformanceData <- data.frame(HabitsPerformanceData)
+```
+
+##Rename the columns of the new data set.
+```{r}
+names(HabitsPerformanceData) <- c("age","gender", "studyHours", "socialMediaHours", "netflixHours","parttimeJob", "attendance", "sleepHours", "diet","exerciseFreq", "parentalEducation", "internet", "mentalHealth", "extracurricular", "examScore")
+```
+
+##Head of the new data set
+```{r}
+head(HabitsPerformanceData)
+```
+
+##Check whether, are there any missing observations in the new data frame.
+```{r}
+sum(is.na(HabitsPerformanceData) == TRUE)
+
+```
+##Get the summary output of the variables.
+```{r}
+summary(HabitsPerformanceData)
+```
+
+##Standard deviations of each variable.
+```{r}
+st_devs <- c(sd(HabitsPerformanceData$age), sd(HabitsPerformanceData$gender), sd(HabitsPerformanceData$studyHours), sd(HabitsPerformanceData$socialMediaHours), sd(HabitsPerformanceData$netflixHours), sd(HabitsPerformanceData$parttimeJob), sd(HabitsPerformanceData$attendance), sd(HabitsPerformanceData$sleepHours), sd(HabitsPerformanceData$diet), sd(HabitsPerformanceData$exerciseFreq), sd(HabitsPerformanceData$parentalEducation), sd(HabitsPerformanceData$internet), sd(HabitsPerformanceData$mentalHealth), sd(HabitsPerformanceData$extracurricular), sd(HabitsPerformanceData$examScore))
+
+st_devs
+```
+
+## Exploratory Data Analysis (EDA)
+
+```{r}
+# Histograms
+hist(HabitsPerformanceData$examScore, breaks = 30, main = "Distribution of Exam Scores", xlab = "Exam Score")
+hist(HabitsPerformanceData$studyHours, breaks = 30, main = "Study Hours per Day", xlab = "Hours")
+
+# Scatterplots with simple linear fit lines
+plot(HabitsPerformanceData$studyHours, HabitsPerformanceData$examScore,
+     xlab = "Study Hours per Day", ylab = "Exam Score", pch = 19, col = "grey")
+abline(lm(examScore ~ studyHours, data = HabitsPerformanceData), lwd = 2)
+
+plot(HabitsPerformanceData$attendance, HabitsPerformanceData$examScore,
+     xlab = "Attendance (%)", ylab = "Exam Score", pch = 19, col = "grey")
+abline(lm(examScore ~ attendance, data = HabitsPerformanceData), lwd = 2)
+
+
+# Boxplots by categories
+boxplot(examScore ~ gender, data = HabitsPerformanceData, main = "Scores by Gender", xlab = "Gender", ylab = "Exam Score")
+boxplot(examScore ~ internet, data = HabitsPerformanceData, main = "Scores by Internet Quality", xlab = "Internet Quality", ylab = "Exam Score")
+```
+
+
+## Correlation & multicollinearity
+
+##Correlation Coefficient 
+
+```{r}
+library(corrplot)
+```
+
+```{r}
+corrplot(corr = cor(HabitsPerformanceData), method = "number" , order = 'FPC', type = 'lower')
+```
+
+
+```{r}
+cor(HabitsPerformanceData)
+```
+
+##Bayesian Analysis
+
+## Fit appropriate Bayesian models
+
+##Model 1: Non-informative Priors
+```{r}
+library(BAS)
+
+model_noninform <- bas.lm(
+  formula = examScore ~ . ,
+  data = HabitsPerformanceData,
+  prior = "g-prior",        # approximates non-informative prior
+  modelprior = uniform(),   # all models equally likely
+  method = "BAS",           # Bayesian Adaptive Sampling
+  MCMC.iterations = 10000   # optional
+)
+
+summary(model_noninform)
+```
+
+##Model 2: Informative Priors
+```{r}
+model_weak <- bas.lm(
+  formula = examScore ~ . ,
+  data = HabitsPerformanceData,
+  prior = "ZS-null",         # Zellner-Siow Cauchy-like prior for mild shrinkage
+  modelprior = uniform(),    # all models equally likely
+  method = "BAS",
+  MCMC.iterations = 10000
+)
+summary(model_weak)
+```
+
+##Model Comparison and Selection
+```{r}
+plot(model_noninform)
+```
+```{r}
+plot(model_weak)
+```
+
+##Posterior Summaries
+
+## Non-informative prior
+```{r}
+coef_noninform <- coef(model_noninform)   # Extract posterior mean, SD
+print(coef_noninform)
+```
+
+## Weak-informative prior
+```{r}
+coef_weak <- coef(model_weak)
+print(coef_weak)
+```
+
+
+## WAIC/DIC Calculation for BAS Models
+```{r}
+## Model Comparison using BAS
+# Calculate log marginal likelihoods for model comparison
+log_marginals <- c(model_noninform$logmarg[which.max(model_noninform$logmarg)],
+                   model_weak$logmarg[which.max(model_weak$logmarg)])
+
+# Approximate Bayes Factor (using log marginal likelihoods)
+bf <- exp(log_marginals[1] - log_marginals[2])
+cat("Bayes Factor (Non-informative vs Weak):", round(bf, 3), "\n")
+
+# Model probabilities
+cat("Model probabilities:\n")
+cat("Non-informative prior model:", round(exp(log_marginals[1])/sum(exp(log_marginals)), 3), "\n")
+cat("Weak prior model:", round(exp(log_marginals[2])/sum(exp(log_marginals)), 3), "\n")
+```
+##Model Diagnostics Section
+```{r}
+# Check variable inclusion probabilities
+cat("\nVariable Inclusion Probabilities (Non-informative prior):\n")
+print(model_noninform$probne0[-1])  # exclude intercept
+
+cat("\nVariable Inclusion Probabilities (Weak prior):\n")
+print(model_weak$probne0[-1])
+
+# Check model size distribution
+cat("\nModel Size Distribution:\n")
+table(model_noninform$size)
+```
+
+##Posterior Predictive Checks
+```{r}
+## Posterior Predictive Checks - FIXED
+# Simulate data from the best model and compare to observed
+best_model_idx <- which.max(model_noninform$postprobs)
+best_model_vars <- model_noninform$which[[best_model_idx]] + 1  # +1 to account for intercept
+
+# Extract the variables included in the best model (excluding intercept)
+included_vars <- best_model_vars[-1] - 1  # -1 to adjust back to column indices
+cat("Variables in best model:", colnames(HabitsPerformanceData)[included_vars], "\n")
+
+# Create design matrix for the best model
+if (length(included_vars) > 0) {
+  X_best <- as.matrix(cbind(Intercept = 1, HabitsPerformanceData[, included_vars]))
+} else {
+  X_best <- matrix(1, nrow = nrow(HabitsPerformanceData), ncol = 1)  # Intercept only
+}
+
+# Get coefficient estimates - FIXED ACCESS METHOD
+beta_hat <- model_noninform$mle[[best_model_idx]]  # This is already the coefficient vector
+y_pred <- X_best %*% beta_hat
+
+# Compare observed vs predicted
+par(mfrow = c(1, 2))
+plot(HabitsPerformanceData$examScore, y_pred, 
+     xlab = "Observed Exam Scores", ylab = "Predicted Exam Scores",
+     main = "Posterior Predictive Check", pch = 19, col = "blue")
+abline(0, 1, col = "red", lwd = 2)
+
+# Residual plot
+residuals <- HabitsPerformanceData$examScore - y_pred
+plot(y_pred, residuals, 
+     xlab = "Predicted Values", ylab = "Residuals",
+     main = "Residual Plot", pch = 19, col = "red")
+abline(h = 0, col = "blue", lwd = 2)
+
+# Add some diagnostic statistics
+cat("\nPosterior Predictive Check Diagnostics:\n")
+cat("Mean Absolute Error:", mean(abs(residuals)), "\n")
+cat("Root Mean Squared Error:", sqrt(mean(residuals^2)), "\n")
+cat("Correlation (Observed vs Predicted):", cor(HabitsPerformanceData$examScore, y_pred), "\n")
+```
+
+##Formal Model Comparison Table
+```{r}
+## ROBUST Model Comparison with Error Handling
+model_comparison <- data.frame(
+  Model = c("Non-informative Prior", "Weak Prior")
+)
+
+# Safely extract values with error handling
+safe_extract <- function(model, value_name) {
+  tryCatch({
+    if (value_name == "logmarg") {
+      val <- max(model[[value_name]], na.rm = TRUE)
+      if (is.infinite(val)) return(NA) else return(val)
+    } else if (value_name == "BIC") {
+      # Get BIC of the best model
+      best_idx <- which.max(model$postprobs)
+      return(model$BIC[best_idx])
+    } else if (value_name == "size") {
+      best_idx <- which.max(model$postprobs)
+      return(model$size[best_idx])
+    } else if (value_name == "postprob") {
+      return(max(model$postprobs))
+    }
+  }, error = function(e) {
+    return(NA)
+  })
+}
+
+# Fill comparison table safely
+model_comparison$Log_Marginal <- c(
+  safe_extract(model_noninform, "logmarg"),
+  safe_extract(model_weak, "logmarg")
+)
+
+model_comparison$BIC <- c(
+  safe_extract(model_noninform, "BIC"),
+  safe_extract(model_weak, "BIC")
+)
+
+model_comparison$Size <- c(
+  safe_extract(model_noninform, "size"),
+  safe_extract(model_weak, "size")
+)
+
+model_comparison$Posterior_Prob <- c(
+  safe_extract(model_noninform, "postprob"),
+  safe_extract(model_weak, "postprob")
+)
+
+cat("\n=== ROBUST MODEL COMPARISON TABLE ===\n")
+print(model_comparison)
+
+# Determine best model
+if (!any(is.na(model_comparison$Log_Marginal))) {
+  best_idx <- which.max(model_comparison$Log_Marginal)
+  cat("\nBest model based on marginal likelihood:", model_comparison$Model[best_idx], "\n")
+} else if (!any(is.na(model_comparison$Posterior_Prob))) {
+  best_idx <- which.max(model_comparison$Posterior_Prob)
+  cat("\nBest model based on posterior probability:", model_comparison$Model[best_idx], "\n")
+} else if (!any(is.na(model_comparison$BIC))) {
+  best_idx <- which.min(model_comparison$BIC)
+  cat("\nBest model based on BIC:", model_comparison$Model[best_idx], "\n")
+} else {
+  cat("\nCannot determine best model due to missing values\n")
+}
+```
+
+##Frequentist linear regression(p-values and confidence intervals)
+```{r}
+lmScore <- lm(formula = examScore ~ . , data = HabitsPerformanceData)
+summary(lmScore)
+```
+##The scatter plots and the fitted simple linear regression lines of the selected explanatory variables versus exam score variable
+
+##Load ggplot2 library.
+```{r}
+
+library(ggplot2)
+```
+
+```{r}
+scPlot1 <- ggplot(data = HabitsPerformanceData , mapping = aes(x = age , y = examScore)) + geom_point(color="blue") + xlab("Age") + ylab("
+Exam Score") + geom_smooth(method=lm, color="red") 
+scPlot1
+
+```
+
+```{r}
+scPlot2 <- ggplot(data = HabitsPerformanceData , mapping = aes(x = gender , y = examScore)) + geom_point(color="blue") + xlab("Gender") + ylab("
+Exam Score") + geom_smooth(method=lm, color="red") 
+scPlot2
+
+```
+
+```{r}
+scPlot3 <- ggplot(data = HabitsPerformanceData , mapping = aes(x = studyHours , y = examScore)) + geom_point(color="blue") + xlab("Study Hours") + ylab("
+Exam Score") + geom_smooth(method=lm, color="red")
+scPlot3
+```
+
+```{r}
+scPlot4 <- ggplot(data = HabitsPerformanceData , mapping = aes(x = socialMediaHours , y = examScore)) + geom_point(color="blue") + xlab("Social Media Hours") + ylab("Exam Score") + geom_smooth(method=lm, color="red")
+scPlot4
+```
+
+
+```{r}
+scPlot5 <- ggplot(data = HabitsPerformanceData , mapping = aes(x = netflixHours , y = examScore)) + geom_point(color="blue") + xlab("Netflix Hours") + ylab("
+Exam Score") + geom_smooth(method=lm, color="red")
+scPlot5
+```
+
+```{r}
+scPlot6 <- ggplot(data = HabitsPerformanceData , mapping = aes(x = parttimeJob , y = examScore)) + geom_point(color="blue") + xlab("Parttime Job") + ylab("
+Exam Score") + geom_smooth(method=lm, color="red") 
+scPlot6
+
+```
+
+```{r}
+scPlot7 <- ggplot(data = HabitsPerformanceData , mapping = aes(x = attendance , y = examScore)) + geom_point(color="blue") + xlab("Attendance") + ylab("
+Exam Score") + geom_smooth(method=lm, color="red")
+scPlot7
+```
+
+```{r}
+scPlot8 <- ggplot(data = HabitsPerformanceData , mapping = aes(x = sleepHours , y = examScore)) + geom_point(color="blue") + xlab("Sleep Hours") + ylab("
+Exam Score") + geom_smooth(method=lm, color="red")
+scPlot8
+```
+
+```{r}
+scPlot9 <- ggplot(data = HabitsPerformanceData , mapping = aes(x = diet , y = examScore)) + geom_point(color="blue") + xlab("Diet") + ylab("
+Exam Score") + geom_smooth(method=lm, color="red") 
+scPlot9
+
+```
+
+```{r}
+scPlot10 <- ggplot(data = HabitsPerformanceData , mapping = aes(x = exerciseFreq , y = examScore)) + geom_point(color="blue") + xlab("Exercise frequency") + ylab("Exam Score") + geom_smooth(method=lm, color="red") 
+scPlot10
+
+```
+
+```{r}
+scPlot11 <- ggplot(data = HabitsPerformanceData , mapping = aes(x = parentalEducation , y = examScore)) + geom_point(color="blue") + xlab("parental Education Level") + ylab("Exam Score") + geom_smooth(method=lm, color="red") 
+scPlot11
+
+```
+
+```{r}
+scPlot12 <- ggplot(data = HabitsPerformanceData , mapping = aes(x = internet , y = examScore)) + geom_point(color="blue") + xlab("Internet") + ylab("Exam Score") + geom_smooth(method=lm, color="red") 
+scPlot12
+
+```
+
+```{r}
+scPlot13 <- ggplot(data = HabitsPerformanceData , mapping = aes(x = mentalHealth , y = examScore)) + geom_point(color="blue") + xlab("Mental Health") + ylab("Exam Score") + geom_smooth(method=lm, color="red") 
+scPlot13
+
+```
+
+```{r}
+scPlot14 <- ggplot(data = HabitsPerformanceData , mapping = aes(x = extracurricular , y = examScore)) + geom_point(color="blue") + xlab("Extracurricular Participation") + ylab("Exam Score") + geom_smooth(method=lm, color="red") 
+scPlot14
+
+```
+
+
+
+**Bayesian Simple Linear Regression**
+
+## We can also use the 'BAS' package to find the best BIC HabitsPerformanceData without taking the stepwise backward process.
+##Load BAS Library
+```{r}
+library(BAS)
+```
+
+##Get the summary output of the above HabitsPerformanceData.
+```{r}
+
+score.lm1 <- bas.lm(formula = examScore ~ . , data = HabitsPerformanceData, prior="BIC", modelprior=uniform())
+
+# Coefficients averaged across models (Bayesian Model Averaging)
+coef(score.lm1, estimator = "BMA")
+
+# Coefficients from the single best model (highest posterior probability)
+coef(score.lm1, estimator = "HPM")
+
+```
+
+##Fit a simple linear regression HabitsPerformanceData of examScores versus studyHours.
+```{r}
+score.lm1 <- lm(formula = examScore ~ studyHours , data = HabitsPerformanceData)
+summary(score.lm1)
+```
+
+##Obtain residuals and n.(Residual analysis checks model accuracy and assumptions. A smaller MSE = better fit.)  
+```{r}
+resid <- residuals(score.lm1) 
+n <- length(resid)
+n
+```
+
+##Calculate MSE
+```{r}
+MSE <- 1/(n-2) * sum((resid ^ 2)) 
+MSE
+```
+##Combine residuals and fitted values into a data frame. 
+```{r}
+result <- data.frame(fitted_values = fitted.values(score.lm1) , residuals =   residuals(score.lm1))
+```
+
+##Load library and plot residuals versus fitted values.
+```{r}
+library(ggplot2)
+ggplot(data = result , aes(x = fitted_values , y = residuals)) + geom_point(color = "blue" , pch = 1 , size = 2) + geom_abline(intercept = 0 , slope = 0) + xlab(expression(paste("Fitted Value " , widehat(examScore)))) + ylab("Residuals")
+```
+
+##Find the observation with the largest fitted value. 
+```{r}
+which.max(as.vector(fitted.values(score.lm1)))
+
+HabitsPerformanceData$studyHours[456] ##model predicts the highest study hours per day
+```
+
+##Shows this observation has the maximum studyHours. 
+```{r}
+which.max(HabitsPerformanceData$studyHours) 
+
+HabitsPerformanceData$studyHours[456] ##the highest actual study hours per day
+```
+
+##Normal probability plot of the residuals.(to check normality assumption) 
+```{r}
+plot(score.lm1, which = 2)
+```
+
+##Credible Intervals for Slope Beta and y-Intercept alpha. 
+```{r}
+output <- summary(score.lm1)$coef[, 1:2] 
+out <- cbind(output, confint(score.lm1)) 
+colnames(out) <- c("Posterior Mean", "Posterior Std", "2.5", "97.5") 
+round(out, 3)
+```
+
+```{r}
+library(ggplot2)
+```
+
+##Construct current prediction.
+```{r}
+alpha <- score.lm1$coefficients[1]
+alpha
+beta <- score.lm1$coefficients[2]
+beta
+new_x <- seq(min(HabitsPerformanceData$studyHours) , max(HabitsPerformanceData$studyHours) , length.out = 100)
+y_hat <- alpha + beta*new_x
+
+```
+
+##Get lower and upper bounds for mean.
+```{r}
+ymean <- data.frame(predict(score.lm1 , newdata = data.frame(studyHours = new_x) , interval = "confidence" , level = 0.95))
+```
+
+##Get lower and upper bounds for prediction.
+```{r}
+ypred <- data.frame(predict(score.lm1 , newdata = data.frame(studyHours = new_x) , interval = "prediction" , level = 0.95))
+
+output <- data.frame(x = new_x , 
+                     y_hat     = pmin(pmax(y_hat, 0), 100),
+                     ymean_lwr = pmin(pmax(ymean$lwr, 0), 100),
+                     ymean_upr = pmin(pmax(ymean$upr, 0), 100),
+                     ypred_lwr = pmin(pmax(ypred$lwr, 0), 100),
+                     ypred_upr = pmin(pmax(ypred$upr, 0), 100))
+output
+```
+
+##Extract potential outlier data point.
+```{r}
+outlier <- data.frame(x = HabitsPerformanceData$studyHours[456] , y = HabitsPerformanceData$examScore[456])
+outlier
+```
+
+##Scatter plot of original.
+```{r}
+plot1 <- ggplot(data = HabitsPerformanceData , aes(x = studyHours , y = examScore)) + geom_point(color = "blue")
+```
+
+##Add bounds of mean and prediction.
+```{r}
+plot2 <- plot1 + 
+  geom_line(data = output , aes(x = new_x , y = y_hat , color = "first") , lty = 1) + 
+  geom_line(data = output , aes(x = new_x , y = ymean_lwr , lty = "second")) +  
+  geom_line(data = output , aes(x = new_x , y = ymean_upr , lty = "second")) + 
+  geom_line(data = output , aes(x = new_x , y = ypred_upr , lty = "third")) + 
+  geom_line(data = output , aes(x = new_x , y = ypred_lwr , lty = "third")) + 
+  scale_colour_manual(values = c("orange") , labels = "Posterior mean" , name = "") + 
+  scale_linetype_manual(values = c(2,3) , labels = c("95% CI for mean" , "95% CI for predictions") , name = "") + 
+  theme_bw() + theme(legend.position = c(1,0) , legend.justification = c(1.5,0))
+```
+
+##Identify potential outlier.
+```{r}
+plot2 + geom_point(data = outlier , aes(x = x , y = y) , color = "orange" , pch = 1 , cex = 5)
+```
+
+
+
+**Bayesian Multiple Linear Regression**
+
+##Import library.
+```{r}
+library(BAS)
+```
+
+##Use `bas.lm` to run regression HabitsPerformanceData.
+```{r}
+score.bas = lm(examScore ~ . , data =  HabitsPerformanceData)
+summary(score.bas)
+```
+```{r}
+par(mfrow = c(2,2))
+plot(score.bas)
+```
+
+##Use `bas.lm` to run regression HabitsPerformanceData.
+```{r}
+score.bas2 <- bas.lm(examScore ~ . , data =  HabitsPerformanceData , 
+                     prior = "BIC" , 
+                     modelprior = Bernoulli(1) ,
+                     include.always = ~ . , 
+                     n.models = 1)
+
+##Posterior Means and Posterior Standard Deviations.
+score.coef = coef(score.bas2)
+score.coef
+```
+##visualization of the coefficients.
+```{r}
+par(mfrow = c(2, 4))
+plot(score.coef , ask = F)
+```
+
+
+##Summary Table.
+```{r}
+out <- confint(score.coef)[, 1:2]
+## Extract the upper and lower bounds of the credible intervals
+
+names = c("posterior mean", "posterior std", colnames(out))
+out = cbind(score.coef$postmean, score.coef$postsd, out)
+colnames(out) = names
+
+round(out, 2)
+```
+
+**Bayesian Model Selection**
+
+```{r}
+# Total num of observations
+n <- nrow(HabitsPerformanceData)
+n
+```
+
+```{r}
+sco.lm1 <- lm(examScore ~ . , data = HabitsPerformanceData)
+sco.step <- step(sco.lm1, k = log(n))
+
+```
+`
+
+```{r}
+library(BAS)
+```
+
+##Model
+```{r}
+basModel <- bas.lm(formula = examScore ~ . , data = HabitsPerformanceData , prior = "BIC" , modelprior  = uniform()) # equal prior to the model
+```
+
+##bas_model
+```{r}
+basCoeff <- coef(basModel) 
+basCoeff
+```
+
+##Best model
+```{r}
+best <- which.max(basModel$logmarg)
+bestmodel <- basModel$which[[best]]
+bestmodel
+```
+```{r}
+bestGamma <- rep(0,basModel$n.vars)
+bestGamma[bestmodel + 1] <- 1
+bestGamma
+```
+
+##Fit the best BIC model by imposing which variables to be used using the indicators.
+```{r}
+bas_bestmodel <- bas.lm(examScore ~ studyHours+socialMediaHours+netflixHours+attendance+sleepHours+exerciseFreq+mentalHealth , data = HabitsPerformanceData,
+ prior = "BIC", n.models = 1, bestmodel = bestGamma,
+ modelprior = uniform())
+```
+
+
+*Coefficient Estimates Under Reference Prior for Best BIC model*
+
+##Retreat coefficients information.
+```{r}
+score.coeff <- coef(bas_bestmodel)
+```
+
+##Retreat bounds of credible intervals.
+```{r}
+out <- confint(score.coeff)[,1:2]
+```
+
+##Combine results and construct summary table.
+```{r}
+basSummary <- cbind(score.coeff$postmean , score.coeff$postsd , out) 
+names <- c("post mean" , "post sd" , colnames(out))
+colnames(basSummary) <- names
+basSummary
+```
+
+*Calculating Posterior Probability*
+
+
+##Use 'bas.lm' for regression
+```{r}
+basModel <- bas.lm(examScore ~ studyHours + socialMediaHours +  netflixHours +  attendance  +  sleepHours + exerciseFreq + mentalHealth , data = HabitsPerformanceData , prior = "BIC" , modelprior = uniform())
+
+round(summary(basModel) , 3)
+```
+
+
+*The marginal posterior inclusion probability (pip)*
+
+```{r}
+print(basModel)
+```
